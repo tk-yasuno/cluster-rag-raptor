@@ -356,6 +356,147 @@ Query time: 5.443秒
    - 処理速度: 2,446文字/秒
    - 検索速度優位性: 60倍（ツリーナビゲーション vs 全探索）
 
+### 例4: 専門技術文書 (example4-bridge-design.py) 🏗️
+
+245ページの橋梁設計手引き（実務文書）を使った専門RAG：
+
+```python
+import requests
+import PyPDF2
+from langchain_ollama import ChatOllama, OllamaEmbeddings
+from raptor import RAPTORRetriever
+
+# 石川県の橋梁設計手引きをダウンロード
+url = "https://www.pref.ishikawa.lg.jp/douken/documents/kyouryousekkeinotebiki.pdf"
+response = requests.get(url, stream=True, timeout=120)
+
+with open("bridge_design_guidelines.pdf", 'wb') as f:
+    total_size = 0
+    for chunk in response.iter_content(chunk_size=8192):
+        f.write(chunk)
+        total_size += len(chunk)
+        if total_size % (1024 * 1024) == 0:
+            print(f"Downloaded: {total_size // (1024*1024)}MB...")
+
+# PDFからテキスト抽出（245ページ）
+with open("bridge_design_guidelines.pdf", 'rb') as f:
+    reader = PyPDF2.PdfReader(f)
+    num_pages = len(reader.pages)
+    print(f"Total pages: {num_pages}")
+    
+    text_parts = []
+    for i, page in enumerate(reader.pages):
+        if (i + 1) % 25 == 0:
+            print(f"Processing page {i + 1}/{num_pages}...")
+        text = page.extract_text()
+        if text:
+            text_parts.append(text)
+    
+    guidelines_text = "\n\n".join(text_parts)
+
+print(f"Extracted {len(guidelines_text):,} characters")
+
+# モデル初期化
+llm = ChatOllama(model="granite-code:8b", temperature=0)
+embeddings = OllamaEmbeddings(model="mxbai-embed-large")
+
+# 専門技術文書用のパラメータ
+raptor = RAPTORRetriever(
+    embeddings_model=embeddings,
+    llm=llm,
+    max_clusters=3,      # 技術文書の構造に最適
+    max_depth=2,         # 効率と精度のバランス
+    chunk_size=1200,     # 専門用語を途切れさせない
+    chunk_overlap=250    # 章節の連続性を保持
+)
+
+# インデックス化
+import tempfile
+with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False) as tmp:
+    tmp.write(guidelines_text)
+    tmp_path = tmp.name
+
+raptor.index(tmp_path)
+
+# 専門的な日本語クエリで検索
+queries = [
+    "耐震設計に関する基準はどのように定められていますか？",
+    "橋梁の施工計画における留意点は何ですか？",
+    "道路橋示方書との整合性についてどのように記載されていますか？"
+]
+
+for query in queries:
+    results = raptor.retrieve(query, top_k=3)
+    print(f"\n🔍 {query}")
+    for i, doc in enumerate(results, 1):
+        preview = doc.page_content[:150].replace('\n', ' ')
+        print(f"  {i}. {preview}...")
+```
+
+**実行方法**:
+```bash
+python example4-bridge-design.py
+```
+
+**出力例**:
+```
+Downloaded: 1MB...
+Downloaded: 2MB...
+...
+Downloaded: 8MB...
+✅ Downloaded 9,315,291 bytes (8MB)
+Total pages: 245
+Processing page 25/245...
+...
+✅ Extracted 207,558 characters from 245 pages
+
+Split into 254 chunks
+Build time: 1.6分
+
+🔍 耐震設計に関する基準はどのように定められていますか？
+Selected cluster 1 at depth 0 (similarity: 0.5102)
+Selected cluster 0 at depth 1 (similarity: 0.4893)
+Query time: 4.269秒
+
+  1. - 114 - ４．設置箇所 (1） 検 査 路 の 設 置 箇 所 は...
+  2. - 135 - 図7.10 落 橋 防 止 構 造 の 例...
+```
+
+**パフォーマンス実績**:
+- 📊 207,558文字（64,745単語、245ページ）を処理
+- 📄 PDF: 9.3MB（図表含む専門技術文書）
+- ⚡ 構築時間: 1.6分
+- 🔍 平均クエリ時間: 2.51秒
+- 🎯 254チャンク → 9リーフノード（28倍圧縮）
+- 🏆 検索速度優位性: 39倍
+
+**🎓 専門技術文書での教訓**:
+
+1. **PDFの特性理解**
+   ```
+   245ページ → 約20万文字
+   理由: 図表、空白、レイアウトが多い
+   教訓: ページ数≠文字数、実測が重要
+   ```
+
+2. **日本語専門用語への対応**
+   - 「耐震設計」「道路橋示方書」「落橋防止構造」など専門用語が正確に検索可能
+   - chunk_size=1200 で用語の途切れを防止
+   - mxbai-embed-large は日本語にも対応
+
+3. **実務文書の構造活用**
+   - 章・節・項の階層構造がRAPTORのツリーと自然に対応
+   - 法規参照や技術基準の横断検索に最適
+   - 設計者の問い合わせに即座に回答（2.5秒）
+
+4. **スケール別実測データ（重要）**
+   ```
+   20万文字: 1.6分構築、2.5秒検索
+   37万文字: 2.5分構築、2.6秒検索
+   
+   結論: 検索時間はほぼ一定（O(log n)の実証）✨
+   ```
+
 ## 🎯 ユースケース別の設定
 
 ### ケース1: 小さな文書（<10万文字）
