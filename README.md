@@ -146,11 +146,13 @@ raptor = RAPTORRetriever(
 
 ## 📚 使用例
 
-### 例1: 哲学文書の検索
+### 例1: 基本的な使用方法 (example.py)
+
+test.txt を使った基本的なRAG検索：
 
 ```python
-raptor.index("philosophy_texts.txt")
-results = raptor.retrieve("プラトンの知識論", top_k=3)
+raptor.index("test.txt")
+results = raptor.retrieve("philosophy", top_k=3)
 
 # 出力例:
 # Selected cluster 0 at depth 0 (similarity: 0.6691)
@@ -158,17 +160,67 @@ results = raptor.retrieve("プラトンの知識論", top_k=3)
 # → プラトンの哲学的信条に関する3件のドキュメントを取得
 ```
 
-### 例2: 歴史文書の検索
+**実行方法**:
+```bash
+python example.py
+```
+
+### 例2: Wikipedia RAG (example2-wiki.py)
+
+Wikipedia から動的にコンテンツを取得してRAG検索：
 
 ```python
-raptor.index("ancient_history.txt")
-results = raptor.retrieve("古代ギリシャの経済", top_k=3)
+import requests
+from raptor import RAPTORRetriever
+
+# Wikipedia APIからコンテンツ取得
+def get_wikipedia_page(title: str) -> str:
+    URL = "https://en.wikipedia.org/w/api.php"
+    params = {
+        "action": "query",
+        "format": "json",
+        "titles": title,
+        "prop": "extracts",
+        "explaintext": True,
+    }
+    headers = {"User-Agent": "RAPTOR_RAG_Example/1.0"}
+    response = requests.get(URL, params=params, headers=headers)
+    data = response.json()
+    page = next(iter(data["query"]["pages"].values()))
+    return page["extract"] if "extract" in page else None
+
+# Miyazaki Hayaoのページを取得
+wiki_content = get_wikipedia_page("Hayao_Miyazaki")
+
+# 一時ファイルに保存してインデックス化
+import tempfile
+with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False) as f:
+    f.write(wiki_content)
+    tmp_path = f.name
+
+raptor.index(tmp_path)
+
+# 検索実行
+results = raptor.retrieve("What animation studio did Miyazaki found?", top_k=3)
 
 # 出力例:
-# Selected cluster 1 at depth 0 (similarity: 0.6339)
-# Selected cluster 2 at depth 1 (similarity: 0.6339)
-# → 経済、生活様式、軍事に関する関連ドキュメントを取得
+# ✅ Fetched 70,159 characters
+# Split into 118 chunks
+# Selected cluster 0 at depth 0 (similarity: 0.7885)
+# Selected cluster 1 at depth 1 (similarity: 0.7720)
+# → Studio Ghibli の設立に関する情報を取得
 ```
+
+**実行方法**:
+```bash
+python example2-wiki.py
+```
+
+**主な機能**:
+- 📥 Wikipedia API からリアルタイムでコンテンツ取得
+- 🌳 70,159文字 → 118チャンク → 9リーフノードに階層化
+- 🔍 複数クエリでの検索デモ（Studio Ghibli、受賞歴、代表作）
+- 📊 高精度検索（類似度 0.73-0.78）
 
 ## 🔬 技術詳細
 

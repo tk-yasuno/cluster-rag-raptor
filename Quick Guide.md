@@ -72,7 +72,7 @@ for i, doc in enumerate(results, 1):
 
 ## 📝 完全な実行例
 
-### example.py
+### 例1: ローカルファイルを使った検索 (example.py)
 
 ```python
 from langchain_ollama import ChatOllama, OllamaEmbeddings
@@ -126,11 +126,113 @@ for i, doc in enumerate(results2, 1):
     print("...")
 ```
 
-### 実行
-
+**実行方法**:
 ```bash
 python example.py
 ```
+
+### 例2: Wikipedia から動的に取得 (example2-wiki.py)
+
+Wikipedia APIを使ってリアルタイムでコンテンツを取得し、RAG検索を実行する例：
+
+```python
+import requests
+import tempfile
+import os
+from langchain_ollama import ChatOllama, OllamaEmbeddings
+from raptor import RAPTORRetriever
+
+def get_wikipedia_page(title: str) -> str:
+    """Wikipedia APIからページコンテンツを取得"""
+    URL = "https://en.wikipedia.org/w/api.php"
+    params = {
+        "action": "query",
+        "format": "json",
+        "titles": title,
+        "prop": "extracts",
+        "explaintext": True,
+    }
+    headers = {"User-Agent": "RAPTOR_RAG_Example/1.0"}
+    response = requests.get(URL, params=params, headers=headers)
+    data = response.json()
+    page = next(iter(data["query"]["pages"].values()))
+    return page["extract"] if "extract" in page else None
+
+# モデル初期化
+llm = ChatOllama(model="granite-code:8b", temperature=0)
+embeddings = OllamaEmbeddings(model="mxbai-embed-large")
+
+# RAPTORレトリーバー作成
+raptor = RAPTORRetriever(
+    embeddings_model=embeddings,
+    llm=llm,
+    max_clusters=3,
+    max_depth=2
+)
+
+# Wikipedia から宮崎駿のページを取得
+print("🌐 Fetching Wikipedia page...")
+wiki_content = get_wikipedia_page("Hayao_Miyazaki")
+print(f"✅ Fetched {len(wiki_content):,} characters")
+
+# 一時ファイルに保存してインデックス化
+with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, suffix='.txt') as tmp:
+    tmp.write(wiki_content)
+    tmp_path = tmp.name
+
+try:
+    print("📊 Indexing Wikipedia content...")
+    raptor.index(tmp_path)
+    
+    # 複数クエリで検索
+    queries = [
+        "What animation studio did Miyazaki found?",
+        "What awards has Miyazaki received?",
+        "What are Miyazaki's most famous films?"
+    ]
+    
+    for query in queries:
+        print(f"\n🔍 Query: '{query}'")
+        results = raptor.retrieve(query, top_k=3)
+        
+        for i, doc in enumerate(results, 1):
+            print(f"\n--- Result {i} ---")
+            print(doc.page_content[:200])
+            
+finally:
+    # 一時ファイルを削除
+    if os.path.exists(tmp_path):
+        os.remove(tmp_path)
+
+print("\n✅ Wikipedia RAG completed!")
+```
+
+**実行方法**:
+```bash
+python example2-wiki.py
+```
+
+**出力例**:
+```
+🌐 Fetching Wikipedia page...
+✅ Fetched 70,159 characters
+📊 Indexing Wikipedia content...
+Split into 118 chunks
+
+🔍 Query: 'What animation studio did Miyazaki found?'
+Selected cluster 0 at depth 0 (similarity: 0.7885)
+Selected cluster 1 at depth 1 (similarity: 0.7720)
+
+--- Result 1 ---
+=== Studio Ghibli ===
+==== Foundation and Laputa (1985–1987) ====...
+```
+
+**主な特徴**:
+- 📥 Wikipedia APIから動的にコンテンツ取得
+- 🌳 70,159文字 → 118チャンク → 階層化
+- 🔍 高精度検索（類似度 0.73-0.78）
+- 🌍 任意のWikipediaページで利用可能
 
 ## 🎯 ユースケース別の設定
 
