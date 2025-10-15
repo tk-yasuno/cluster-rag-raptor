@@ -48,6 +48,9 @@ Thumbs.db
 # Logs
 *.log
 
+# Personal/Private documents
+LINKEDIN_POST.md
+
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb
