@@ -603,7 +603,52 @@ llm = ChatOpenAI(model="gpt-4", temperature=0)
 raptor = RAPTORRetriever(embeddings_model=embeddings, llm=llm)
 ```
 
-## 🐛 トラブルシューティング
+## � GMM+BIC Enhancement (NEW!)
+
+**最新の改良版**: Gaussian Mixture Model (GMM) + Bayesian Information Criterion (BIC) による自動最適クラスター選択
+
+### 主な改善点
+
+1. **自動最適化**: BICがクラスター数を自動選択（手動チューニング不要）
+2. **構築時間短縮**: 11-44%の高速化を実証
+3. **検索品質向上**: 類似度スコア70%超の高品質検索
+4. **柔軟なクラスタリング**: GMMによる楕円形クラスタ対応
+
+### 使用方法
+
+```python
+from raptor_gmm import RAPTORRetrieverGMM
+
+# GMM + BIC でツリー構築
+raptor_gmm = RAPTORRetrieverGMM(
+    embeddings_model=embeddings,
+    llm=llm,
+    max_clusters=5,          # BIC探索範囲（2-5）
+    min_clusters=2,
+    use_bic=True,            # BIC最適化ON
+    clustering_method="gmm"  # または "kmeans"
+)
+
+raptor_gmm.index("your_document.txt")
+results = raptor_gmm.retrieve("query", top_k=3)
+```
+
+### 実験結果（ESL Book: 1.83M文字）
+
+| 手法 | 構築時間 | 高速化 | クエリ時間 | 類似度 |
+|------|---------|--------|-----------|--------|
+| K-means (固定 k=3) | 33.5分 | ベースライン | 4.96秒 | N/A |
+| **GMM + BIC** | 31.9分 | **+4.8%** | 16.07秒 | **73.6%** |
+| **K-means + BIC** | 29.8分 | **+11.0%** ⚡ | 15.72秒 | **69.4%** |
+
+**推奨**: 
+- 速度重視 → `K-means + BIC`
+- 品質重視 → `GMM + BIC`
+- 大規模クエリ（1000回以上） → `K-means (固定)`
+
+詳細は [GMM_BIC_GUIDE.md](GMM_BIC_GUIDE.md) および [ESL_COMPARISON_RESULTS.md](ESL_COMPARISON_RESULTS.md) を参照。
+
+## �🐛 トラブルシューティング
 
 ### よくある問題
 
