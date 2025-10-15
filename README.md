@@ -1,4 +1,4 @@
-# RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval
+# Open-sourced RAPTOR: Recursive Abstractive Processing for Tree-Organized Retrieval
 
 🌳 階層的文書検索システムの完全なオープンソース実装
 
