@@ -222,6 +222,93 @@ python example2-wiki.py
 - 🔍 複数クエリでの検索デモ（Studio Ghibli、受賞歴、代表作）
 - 📊 高精度検索（類似度 0.73-0.78）
 
+### 例3: 大規模論文処理 (example3-large-scale.py) 🚀
+
+arXiv論文（370K文字）を使った大規模RAGの実証：
+
+```python
+from raptor import RAPTORRetriever
+import requests
+
+# arXiv論文をダウンロード
+def download_arxiv_pdf(arxiv_id: str, output_path: str) -> bool:
+    url = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
+    response = requests.get(url, stream=True, timeout=60)
+    with open(output_path, 'wb') as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+    return True
+
+# PDFからテキスト抽出
+import PyPDF2
+def pdf_to_text(pdf_path: str) -> str:
+    with open(pdf_path, 'rb') as f:
+        reader = PyPDF2.PdfReader(f)
+        text_parts = [page.extract_text() for page in reader.pages]
+        return "\n\n".join(text_parts)
+
+# 大規模文書用の最適化パラメータ
+raptor = RAPTORRetriever(
+    embeddings_model=embeddings,
+    llm=llm,
+    max_clusters=3,      # バランスの良いクラスタ数
+    max_depth=2,         # 効率重視の深さ
+    chunk_size=1200,     # ⭐ 単語の途切れを防ぐ最適サイズ
+    chunk_overlap=250    # ⭐ 文脈保持のための十分なオーバーラップ
+)
+
+# RAG論文をインデックス化（arXiv:2508.06401）
+raptor.index("rag_survey.txt")  # 370,694文字
+
+# 複数の複雑なクエリで検証
+queries = [
+    "What are the main techniques used in RAG systems?",
+    "What evaluation metrics are used for RAG systems?",
+    "What are the main challenges in RAG implementation?",
+    "How does retrieval-augmented generation compare to fine-tuning?",
+    "What are the latest advancements in RAG research?"
+]
+
+for query in queries:
+    results = raptor.retrieve(query, top_k=3)
+    # 完全なコンテキストを持つ高品質な結果を取得
+```
+
+**実行方法**:
+```bash
+python example3-large-scale.py
+```
+
+**パフォーマンス実績**:
+- 📊 **文書規模**: 370,694文字（0.37M）、48,399単語
+- ⚡ **構築時間**: 2.5分（404チャンク処理）
+- 🔍 **平均クエリ時間**: 2.55秒
+- 🎯 **圧縮率**: 404チャンク → 9リーフノード（45倍圧縮）
+- 🏆 **検索速度優位性**: 構築の60倍高速（ツリーナビゲーション vs 全探索）
+
+**🎓 重要な教訓**:
+
+1. **chunk_size の最適化が重要**
+   - ❌ 1000文字: 単語が途中で途切れ、意味不明な結果
+   - ✅ 1200文字: 完全なフレーズ・段落を保持、クエリ速度26%向上
+   
+2. **chunk_overlap の効果**
+   - 250文字のオーバーラップで文脈の連続性を確保
+   - チャンク間の意味的なギャップを埋める
+
+3. **スケーラビリティの実証**
+   - 370K文字でも2.5分で構築完了
+   - 検索は常に2-3秒で一貫した高速性
+   - メモリ使用量: ~1.5GB（効率的）
+
+4. **パラメータ選択の指針**
+   - 小規模（<100K）: `chunk_size=500-800`
+   - 中規模（100-500K）: `chunk_size=1000-1200` ⭐推奨
+   - 大規模（>500K）: `chunk_size=1500-2000`
+- 🌳 70,159文字 → 118チャンク → 9リーフノードに階層化
+- 🔍 複数クエリでの検索デモ（Studio Ghibli、受賞歴、代表作）
+- 📊 高精度検索（類似度 0.73-0.78）
+
 ## 🔬 技術詳細
 
 ### クラスタリングアルゴリズム

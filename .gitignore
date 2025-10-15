@@ -43,6 +43,7 @@ Thumbs.db
 *.csv
 *.json
 *.pkl
+*.pdf
 
 # Logs
 *.log
