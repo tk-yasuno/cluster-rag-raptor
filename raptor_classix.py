@@ -95,10 +95,19 @@ class RAPTORRetrieverCLASSIX:
         return chunks
     
     def embed_documents(self, documents: List[Document]) -> np.ndarray:
-        """ドキュメントをベクトル化"""
+        """ドキュメントをベクトル化（バッチ処理対応）"""
         texts = [doc.page_content for doc in documents]
-        embeddings = self.embeddings_model.embed_documents(texts)
-        return np.array(embeddings)
+        
+        # バッチサイズ100でバッチ処理
+        batch_size = 100
+        all_embeddings = []
+        
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            batch_embeddings = self.embeddings_model.embed_documents(batch)
+            all_embeddings.extend(batch_embeddings)
+        
+        return np.array(all_embeddings)
     
     def cluster_documents_classix(
         self, 
